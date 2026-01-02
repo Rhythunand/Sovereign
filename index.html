@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="en" :class="$store.darkMode.isDark ? 'dark' : ''">
+<head>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign Antiques | Curator Dashboard</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                        display: ['Cinzel', 'serif'],
+                    },
+                    colors: {
+                        gold: { 400: '#D4AF37', 500: '#C5A028', 900: '#5C4812' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        body { 
+            background-color: #fcfcfc; 
+            color: #1a1a1a; 
+            transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), color 0.8s;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .dark body { 
+            background-color: #080808; 
+            color: #e5e5e5; 
+        }
+
+        /* Luxury Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #333; }
+
+        /* Glass Effect */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .dark .glass-panel {
+            background: rgba(10, 10, 10, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Animations */
+        .fade-in-up { animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; transform: translateY(20px); }
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        
+        @keyframes fadeInUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .image-zoom-container { overflow: hidden; }
+        .image-zoom-container img { transition: transform 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+        .image-zoom-container:hover img { transform: scale(1.05); }
+
+        /* Custom Selection Color */
+        ::selection { background: #D4AF37; color: white; }
+    </style>
+</head>
+<body x-data="shopSystem" x-init="init()" x-cloak class="antialiased">
+
+    <div class="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+        <template x-for="note in notifications" :key="note.id">
+            <div x-show="note.show" x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-y-4 scale-90"
+                 x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave="transition ease-in duration-300"
+                 x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave-end="opacity-0 translate-y-4 scale-90"
+                 class="glass-panel px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 pointer-events-auto min-w-[300px]">
+                <div class="w-2 h-2 rounded-full" :class="note.type === 'error' ? 'bg-red-500' : 'bg-gold-400'"></div>
+                <div>
+                    <p class="font-serif text-sm font-semibold" x-text="note.title"></p>
+                    <p class="text-[10px] uppercase tracking-wider opacity-60" x-text="note.message"></p>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <nav class="fixed top-0 w-full px-6 md:px-12 py-6 flex justify-between items-center z-50 transition-all duration-500" 
+         :class="scrolled ? 'glass-panel shadow-sm py-4' : 'bg-transparent'">
+        
+        <div class="flex items-center gap-12">
+            <h1 @click="goTo('home')" class="font-display text-2xl tracking-widest cursor-pointer hover:opacity-70 transition-opacity">SOVEREIGN</h1>
+            <div class="hidden md:flex gap-8 text-[10px] font-bold uppercase tracking-[0.2em] text-stone-500 dark:text-stone-400">
+                <button @click="goTo('catalog'); activeCategory='All'" class="hover:text-black dark:hover:text-white transition-colors">Archive</button>
+                <button @click="goTo('catalog'); activeCategory='Ancient'" class="hover:text-black dark:hover:text-white transition-colors">Curated</button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-8 text-[10px] font-bold uppercase tracking-widest">
+            <button @click="goTo('cart')" class="relative group">
+                <span class="group-hover:text-gold-500 transition-colors">Collection</span>
+                <span x-show="cart.length > 0" x-transition 
+                      class="absolute -top-3 -right-3 w-4 h-4 bg-gold-400 text-white rounded-full flex items-center justify-center text-[8px]" 
+                      x-text="cart.length"></span>
+            </button>
+
+            <button @click="goTo('orders')" class="opacity-50 hover:opacity-100 transition-opacity">
+                Orders
+            </button>
+
+            
+            <button @click="toggleTheme()" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                <svg x-show="!$store.darkMode.isDark" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                <svg x-show="$store.darkMode.isDark" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+            </button>
+            
+            <button @click="goTo('admin')" class="opacity-50 hover:opacity-100 transition-opacity border-b border-transparent hover:border-current">CMS</button>
+            <button x-show="isLoggedIn" @click="logout()" 
+                    class="px-4 py-2 border border-red-500/30 text-red-500 text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">
+                Logout
+            </button>
+            
+            <script src="/js/auth.js"></script>
+            <button x-show="!isUserLoggedIn" @click="view='user-auth'"
+                class="opacity-50 hover:opacity-100 transition-opacity">
+                Sign In
+                </button>
+
+                <button x-show="isUserLoggedIn" @click="logoutUser()"
+                class="px-4 py-2 border border-stone-300 text-[10px] uppercase tracking-widest">
+                Logout
+            </button>
+        </div>
+    </nav>
+
+
+    <template x-if="view === 'home'">
+        <main class="min-h-screen">
+            <div class="h-screen relative flex items-center justify-center overflow-hidden">
+                <div class="absolute inset-0 z-0">
+                    <img src="https://images.unsplash.com/photo-1461360370896-922624d12aa1?auto=format&fit=crop&w=1920&q=80" 
+                         class="w-full h-full object-cover brightness-[0.8] dark:brightness-[0.3] scale-105 animate-[pulse_10s_ease-in-out_infinite]">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20"></div>
+                </div>
+                
+                <div class="relative z-10 text-center text-white px-4 space-y-8">
+                    <div class="fade-in-up">
+                        <p class="uppercase tracking-[0.6em] text-[9px] mb-6 opacity-70">Est. 1924 • London • Paris • Tokyo</p>
+                        <h2 class="font-display text-5xl md:text-8xl lg:text-9xl leading-tight">Tangible<br><span class="font-serif italic text-gold-400">History.</span></h2>
+                    </div>
+                    
+                    <div class="fade-in-up delay-200 pt-8">
+                        <button @click="goTo('catalog')" 
+                                class="group relative px-12 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full overflow-hidden transition-all hover:bg-white hover:text-black hover:scale-105 duration-500">
+                            <span class="relative z-10 text-[10px] font-bold uppercase tracking-[0.3em]">Explore Collection</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce opacity-50">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                </div>
+            </div>
+            
+            <section class="py-32 px-6 md:px-12 max-w-7xl mx-auto">
+                <div class="grid md:grid-cols-2 gap-24 items-center">
+                    <div class="space-y-8">
+                        <h3 class="font-serif text-4xl md:text-5xl leading-tight dark:text-white">We do not sell objects.<br>We transfer <span class="italic text-gold-500">stewardship.</span></h3>
+                        <p class="text-stone-600 dark:text-stone-400 leading-loose font-light">
+                            Each artifact in the Sovereign archive has survived centuries of war, peace, love, and loss. When you acquire a piece from us, you are not merely making a purchase; you are writing the next chapter in a story that began long before you were born.
+                        </p>
+                        <div class="flex gap-12 pt-8 border-t border-stone-200 dark:border-stone-800">
+                            <div>
+                                <h4 class="font-display text-3xl mb-1 dark:text-white">100+</h4>
+                                <p class="text-[9px] uppercase tracking-widest text-stone-500">Years of Service</p>
+                            </div>
+                            <div>
+                                <h4 class="font-display text-3xl mb-1 dark:text-white">Auth</h4>
+                                <p class="text-[9px] uppercase tracking-widest text-stone-500">Guaranteed Provenance</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative group">
+                        <div class="absolute inset-0 bg-gold-500 rounded-tr-[100px] rounded-bl-[100px] blur-2xl opacity-20 group-hover:opacity-30 transition-opacity duration-700"></div>
+                        <img src="https://images.unsplash.com/photo-1599619585752-c32942875b63?auto=format&fit=crop&w=1000" 
+                             class="relative z-10 rounded-tr-[100px] rounded-bl-[100px] shadow-2xl grayscale hover:grayscale-0 transition-all duration-1000">
+                    </div>
+                </div>
+            </section>
+        </main>
+    </template>
+
+    <template x-if="view === 'catalog'">
+        <section class="pt-32 pb-20 px-6 md:px-12 max-w-[1600px] mx-auto min-h-screen" x-transition.opacity.duration.500ms>
+            
+            <div class="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
+                <div>
+                    <h2 class="font-display text-4xl mb-4 dark:text-white">The Archive</h2>
+                    <p class="text-stone-500 dark:text-stone-400 text-sm max-w-md">Browse our currently available acquisitions. Use the filters to narrow by era or provenance.</p>
+                </div>
+                
+                <div class="flex flex-col md:flex-row gap-4 bg-white dark:bg-stone-900 p-2 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800">
+                    <div class="relative">
+                        <input type="text" x-model="searchQuery" placeholder="Search provenance..." 
+                               class="pl-10 pr-4 py-2 bg-transparent outline-none text-sm w-48 focus:w-64 transition-all dark:text-white placeholder:text-stone-400">
+                        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <div class="h-8 w-px bg-stone-200 dark:bg-stone-700 hidden md:block"></div>
+                    <div class="flex gap-2 overflow-x-auto pb-2 md:pb-0">
+                        <template x-for="cat in categories">
+                            <button @click="activeCategory = cat"
+                                    class="px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
+                                    :class="activeCategory === cat ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800'"
+                                    x-text="cat"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-16">
+                <template x-for="(product, index) in filteredProducts" :key="product.id">
+                    <div class="group cursor-pointer fade-in-up" 
+                        :style="`animation-delay: ${index * 50}ms`" 
+                        @click="openProduct(product)"
+                        :class="product.isSold ? 'opacity-60 grayscale' : ''"> <div class="image-zoom-container aspect-[3/4] bg-stone-100 dark:bg-stone-900 overflow-hidden relative mb-6">
+                            <img :src="product.images[0]" class="w-full h-full object-cover">
+                            
+                            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-6">
+                                <p class="text-white text-[10px] uppercase tracking-widest translate-y-4 group-hover:translate-y-0 transition-transform duration-500"
+                                x-text="product.isSold ? 'Private Collection' : 'View Details'"></p>
+                            </div>
+
+                            <template x-if="product.isSold">
+                                <div class="absolute inset-0 flex items-center justify-center z-10">
+                                    <div class="bg-red-600/90 text-white px-6 py-2 backdrop-blur-sm -rotate-12 border border-white/20 shadow-xl">
+                                        <span class="text-[10px] font-bold uppercase tracking-[0.3em]">Sold</span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-serif text-xl dark:text-white group-hover:text-gold-500 transition-colors" 
+                                    :class="product.isSold ? 'line-through decoration-stone-500' : ''"
+                                    x-text="product.name"></h3>
+                                <p class="text-[10px] uppercase tracking-widest text-stone-400 mt-1" x-text="product.era"></p>
+                            </div>
+                            <span class="font-sans text-sm font-medium dark:text-stone-300" 
+                                :class="product.isSold ? 'opacity-50' : ''"
+                                x-text="formatCurrency(product.price)"></span>
+                        </div>
+                    </div>
+                </template>
+                
+                <div x-show="filteredProducts.length === 0" class="col-span-full py-20 text-center">
+                    <p class="font-serif text-2xl text-stone-400 italic">No artifacts match your query.</p>
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <template x-if="view === 'product-detail'">
+       <section class="min-h-screen bg-white dark:bg-[#0a0a0a]" x-transition.opacity 
+         x-data="{ activeImg: 0, lightbox: false }">
+    
+            <div x-show="lightbox" 
+                x-transition.opacity
+                @keydown.escape.window="lightbox = false"
+                class="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 md:p-12">
+                <button @click="lightbox = false" class="absolute top-8 right-8 text-white hover:text-gold-400 transition-colors">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+                <img :src="selectedProduct.images[activeImg]" class="max-w-full max-h-full object-contain shadow-2xl">
+            </div>
+
+            <div class="grid lg:grid-cols-2 h-screen">
+                <div class="h-full overflow-hidden bg-stone-50 dark:bg-black flex flex-col">
+                    <div class="flex-1 relative overflow-hidden cursor-zoom-in group" @click="lightbox = true">
+                        <img :src="selectedProduct.images[activeImg]" 
+                            class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                            :key="activeImg">
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                            <span class="opacity-0 group-hover:opacity-100 text-white text-[10px] uppercase tracking-widest font-bold bg-black/40 px-4 py-2 backdrop-blur-md rounded-full transition-opacity">Click to expand</span>
+                        </div>
+                    </div>
+
+                    <div class="p-6 flex gap-4 overflow-x-auto no-scrollbar border-t border-stone-100 dark:border-stone-900 bg-white dark:bg-stone-950">
+                        <template x-for="(img, index) in selectedProduct.images" :key="index">
+                            <button @click="activeImg = index" 
+                                    class="relative w-20 h-20 flex-shrink-0 overflow-hidden rounded-sm transition-all duration-300"
+                                    :class="activeImg === index ? 'ring-2 ring-gold-500 opacity-100' : 'opacity-40 hover:opacity-100'">
+                                <img :src="img" class="w-full h-full object-cover">
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="lg:hidden h-[50vh] overflow-hidden relative">
+                    <img :src="selectedProduct.images[activeImg]" class="w-full h-full object-cover" @click="lightbox = true">
+                </div>
+                
+                <div class="h-full overflow-y-auto px-8 md:px-20 py-24 lg:py-32 flex flex-col justify-center relative">
+                    <button @click="view = 'catalog'" class="absolute top-24 left-8 md:left-20 text-[10px] uppercase tracking-widest font-bold opacity-40 hover:opacity-100 transition-opacity">← Archive</button>
+                    
+                    <div class="space-y-8 max-w-lg">
+                        <div class="flex items-center gap-3 text-gold-500">
+                            <span class="w-2 h-2 rounded-full bg-gold-500"></span>
+                            <span class="text-[10px] uppercase tracking-[0.2em] font-bold" x-text="selectedProduct.category"></span>
+                        </div>
+                        
+                        <h2 class="font-display text-5xl md:text-6xl dark:text-white leading-none" x-text="selectedProduct.name"></h2>
+                        <p class="font-serif text-3xl italic text-stone-500" x-text="formatCurrency(selectedProduct.price)"></p>
+                        
+                        <template x-if="selectedProduct.story">
+                            <div class="mt-8 p-6 bg-stone-50 dark:bg-stone-900/50 border-l-2 border-gold-500/50 relative overflow-hidden">
+                                <div class="absolute -right-4 -top-4 opacity-5">
+                                    <svg class="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M14 17h-4v-1h4v1zm7-11v11c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h4l2-2h4l2 2h4c1.1 0 2 .9 2 2z"/></svg>
+                                </div>
+                                
+                                <h4 class="text-[9px] uppercase tracking-[0.2em] font-bold text-gold-500 mb-3">Provenance & History</h4>
+                                <p class="font-serif italic text-stone-600 dark:text-stone-300 leading-relaxed" x-text="selectedProduct.story"></p>
+                            </div>
+                        </template>
+
+                        <div class="py-8 border-y border-stone-100 dark:border-stone-800 space-y-6">
+                            <p class="text-stone-600 dark:text-stone-400 leading-relaxed font-light" x-text="selectedProduct.description"></p>
+                            
+                            <div class="grid grid-cols-2 gap-6">
+                                <template x-for="detail in selectedProduct.details">
+                                    <div>
+                                        <p class="text-[9px] uppercase tracking-widest text-stone-400 mb-1" x-text="detail.label"></p>
+                                        <p class="font-serif text-lg dark:text-stone-200" x-text="detail.value"></p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <button @click="addToCart(selectedProduct)" 
+                                    :disabled="selectedProduct.isSold || inCart(selectedProduct.id)"
+                                    class="flex-1 py-5 font-bold uppercase text-[10px] tracking-[0.2em] transition-all"
+                                    :class="selectedProduct.isSold 
+                                            ? 'bg-stone-200 dark:bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-300 dark:border-stone-700' 
+                                            : 'bg-black dark:bg-white text-white dark:text-black hover:bg-gold-900 dark:hover:bg-stone-200'">
+                                <span x-text="getButtonText(selectedProduct)"></span>
+                            </button>
+                            
+                            <button :disabled="selectedProduct.isSold"
+                                    :class="selectedProduct.isSold ? 'opacity-30 cursor-not-allowed' : 'hover:border-black dark:hover:border-white'"
+                                    class="w-16 border border-stone-200 dark:border-stone-800 flex items-center justify-center transition-colors">
+                                <svg class="w-5 h-5 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <p class="text-[9px] text-stone-400 text-center">
+                            Includes Certificate of Authenticity & White Glove Delivery.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <template x-if="view === 'cart'">
+        <section class="pt-32 pb-20 px-6 md:px-12 max-w-5xl mx-auto min-h-screen">
+            <h2 class="font-display text-4xl mb-12 dark:text-white">Acquisition List</h2>
+            
+            <div x-show="cart.length === 0" class="text-center py-20 border border-dashed border-stone-300 dark:border-stone-700 rounded-lg">
+                <p class="font-serif text-xl text-stone-400 mb-4">Your collection is empty.</p>
+                <button @click="goTo('catalog')" class="text-[10px] font-bold uppercase tracking-widest border-b border-black dark:border-white pb-1">Begin Curating</button>
+            </div>
+
+            <div x-show="cart.length > 0" class="grid md:grid-cols-3 gap-12">
+                <div class="md:col-span-2 space-y-6">
+                    <template x-for="(item, index) in cart" :key="index">
+                        <div class="flex gap-6 items-center p-4 bg-white dark:bg-stone-900 shadow-sm border border-stone-100 dark:border-stone-800 rounded-xl">
+                            <img :src="item.images[0]" class="w-24 h-24 object-cover rounded-lg">
+                            <div class="flex-1">
+                                <h4 class="font-serif text-xl dark:text-white" x-text="item.name"></h4>
+                                <p class="text-[10px] uppercase tracking-widest text-stone-500 mb-2" x-text="item.category"></p>
+                                <p class="font-medium dark:text-stone-300" x-text="formatCurrency(item.price)"></p>
+                            </div>
+                            <button @click="removeFromCart(index)" class="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full transition-colors">
+                                <svg class="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-stone-50 dark:bg-stone-900 p-8 rounded-xl border border-stone-100 dark:border-stone-800 space-y-6">
+                        <div class="flex justify-between items-center pb-6 border-b border-stone-200 dark:border-stone-700">
+                            <span class="font-serif text-lg dark:text-white">Total Estimate</span>
+                            <span class="font-display text-2xl dark:text-white" x-text="formatCurrency(cartTotal())"></span>
+                        </div>
+                        <button @click="payWithRazorpay()" 
+                                class="w-full py-4 bg-black dark:bg-white text-white dark:text-black font-bold uppercase text-[10px] tracking-[0.2em] hover:opacity-80 transition-opacity">
+                            Complete Acquisition
+                        </button>
+                        <p class="text-[9px] text-center text-stone-400 leading-tight">
+                            By proceeding, you request a consultation for the acquisition of these items. No payment is taken online.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <template x-if="view === 'admin'">
+        <div class="min-h-screen bg-white dark:bg-stone-950">
+            
+            <template x-if="!isLoggedIn">
+                <div class="max-w-md mx-auto mt-32 p-8 bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xl rounded-xl">
+                    <h2 class="font-display text-2xl mb-6 text-center dark:text-white tracking-widest">
+                        Curator Authentication
+                    </h2>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-[9px] uppercase tracking-[0.2em] text-stone-500 mb-1 block">Identity</label>
+                            <input type="text" x-model="loginForm.username" placeholder="Username"
+                                class="w-full p-3 bg-white dark:bg-stone-800 outline-none border border-stone-200 dark:border-stone-700 focus:ring-1 focus:ring-gold-500 dark:text-white transition-all">
+                        </div>
+
+                        <div>
+                            <label class="text-[9px] uppercase tracking-[0.2em] text-stone-500 mb-1 block">Security Key</label>
+                            <input type="password" x-model="loginForm.password" placeholder="Password"
+                                class="w-full p-3 bg-white dark:bg-stone-800 outline-none border border-stone-200 dark:border-stone-700 focus:ring-1 focus:ring-gold-500 dark:text-white transition-all">
+                        </div>
+
+                        <button @click="login()"
+                            class="w-full py-4 bg-black dark:bg-gold-500 text-white dark:text-black font-bold uppercase text-[10px] tracking-[0.3em] hover:opacity-80 transition-opacity mt-2">
+                            Access Dashboard
+                        </button>
+
+                        <p x-show="authError" x-text="authError"
+                            class="text-red-500 text-center text-[10px] font-bold uppercase tracking-widest mt-4 bg-red-50 dark:bg-red-900/20 py-2 rounded">
+                        </p>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="isLoggedIn">
+                <section class="w-full max-w-7xl mx-auto px-6 pt-32 pb-20">
+                    
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-4">
+                        <div>
+                            <h2 class="font-display text-3xl mb-2 dark:text-white tracking-tight">Curator's Console</h2>
+                            <p class="text-sm text-stone-500 font-serif italic">Inventory Management & Archive Authorization</p>
+                        </div>
+                        <button @click="resetToSeed()" 
+                            class="text-[10px] text-red-500 font-bold uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-900/10 px-4 py-2 rounded border border-red-200 dark:border-red-900/30 transition-colors">
+                            Reset Database to Defaults
+                        </button>
+
+                    </div>
+
+                    <!-- ===========================
+     ADMIN STATS (Place HERE)
+     Insert immediately AFTER the Curator's header div (the one with mb-12)
+     and BEFORE the <div class="grid lg:grid-cols-3 gap-12">
+   =========================== -->
+                    <section
+                        x-show="isLoggedIn"
+                        x-cloak
+                        x-transition
+                        class="max-w-7xl mx-auto px-6 pb-8 space-y-6"
+                        aria-hidden="false"
+                    >
+                    <!-- =====================
+                        STATS CARDS
+                    ====================== -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <template x-for="card in adminCards" :key="card.label">
+                                <div class="p-5 rounded-2xl glass-panel shadow-lg border border-white/5">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <p
+                                                class="text-sm text-stone-400 uppercase tracking-widest"
+                                                x-text="card.label"
+                                            ></p>
+                                            <p
+                                                class="mt-2 text-2xl font-semibold dark:text-white"
+                                                x-text="card.value"
+                                            ></p>
+                                        </div>
+
+                                        <div
+                                            class="w-10 h-10 rounded-full flex items-center justify-center"
+                                            :class="card.iconBg"
+                                        >
+                                            <svg class="w-5 h-5 text-white" x-html="card.icon"></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- =====================
+                            CHART + SALES PANEL
+                        ====================== -->
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <!-- Chart (2/3 width) -->
+                            <div
+                                class="lg:col-span-2 p-6 rounded-2xl glass-panel shadow-lg border border-white/5"
+                            >
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-display text-lg dark:text-white">
+                                        Order Summary
+                                    </h3>
+                                    <span class="text-sm text-stone-400">
+                                        Last 12 months
+                                    </span>
+                                </div>
+
+                                <div class="h-[320px]">
+                                    <canvas id="adminChart" class="w-full h-full"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Sales Overview (1/3 width) -->
+                            <div
+                                class="p-6 rounded-2xl glass-panel shadow-lg border border-white/5 flex flex-col"
+                            >
+                                <h3 class="font-display text-lg mb-4 dark:text-white">
+                                    Sales Overview
+                                </h3>
+
+                            <!-- Recent Orders -->
+                                <div class="space-y-4 text-sm flex-1">
+                                    <template x-for="o in recentOrders" :key="o.id">
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <div
+                                                    class="text-sm font-medium dark:text-white"
+                                                        x-text="o.id"
+                                                ></div>
+                                                <div
+                                                    class="text-xs text-stone-400"
+                                                    x-text="o.date"
+                                                ></div>
+                                            </div>
+
+                                            <div
+                                                class="text-sm font-medium"
+                                                :class="o.amount >= 0 ? 'text-green-400' : 'text-red-400'">
+                                            
+                                                <span
+                                                    x-text="(o.amount >= 0 ? '+' : '-') + '₹' + Math.abs(Number(o.amount)).toLocaleString('en-IN')"
+                                                ></span>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <div
+                                        x-show="recentOrders.length === 0"
+                                        class="py-6 text-center text-stone-400">
+                                        No recent orders
+                                    </div>
+                                </div>
+
+                            <!-- Total Sales -->
+                                <div class="mt-6 pt-6 border-t border-white/5">
+                                    <p class="text-sm text-stone-400">Total Sales</p>
+                                    <p
+                                        class="text-2xl font-semibold dark:text-white mt-1"
+                                        x-text="'₹' + Number(dashboardStats.totalRevenue || 0).toLocaleString('en-IN')"
+                                    ></p>
+
+                                    <div class="mt-4 h-2 bg-white/5 rounded-full overflow-hidden">
+                                        <div
+                                            class="h-full bg-gradient-to-r from-blue-500 to-blue-400"
+                                            :style="`width: ${Math.min(
+                                            100,
+                                            (dashboardStats.totalRevenue /
+                                            (dashboardStats.revenueTarget || 100000)) * 100
+                                            )}%`"
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===========================
+                        END ADMIN STATS
+                    =========================== -->
+
+
+                    <div class="grid lg:grid-cols-3 gap-12">
+                        <div class="lg:col-span-1">
+                            <div class="bg-white dark:bg-stone-900 p-8 rounded-2xl shadow-lg border border-stone-100 dark:border-stone-800 sticky top-32">
+                                <h3 class="font-serif text-xl mb-6 dark:text-white border-b border-stone-100 dark:border-stone-800 pb-4">Acquisition Entry</h3>
+                                <div x-show="selectedEditId" 
+                                    x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0 -translate-y-2"
+                                    x-transition:enter-end="opacity-100 translate-y-0"
+                                    class="mb-6 p-3 bg-gold-400/10 border border-gold-400/30 rounded-lg flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="relative flex h-2 w-2">
+                                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-2 w-2 bg-gold-500"></span>
+                                        </span>
+                                        <p class="text-[10px] font-bold uppercase tracking-widest text-gold-900 dark:text-gold-400">Editing existing item</p>
+                                    </div>
+                                    <button @click="selectedEditId = null; resetForm()" 
+                                            class="text-[9px] uppercase font-bold text-stone-400 hover:text-stone-600 dark:hover:text-white transition-colors">
+                                        Cancel
+                                    </button>
+                                </div>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">Artifact Name</label>
+                                        <input type="text" x-model="newItem.name" 
+                                            class="w-full p-3 bg-stone-50 dark:bg-stone-800 rounded border-none outline-none focus:ring-1 focus:ring-gold-500 dark:text-white transition-all">
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">Price (INR)</label>
+                                            <input type="number" x-model="newItem.price" 
+                                                class="w-full p-3 bg-stone-50 dark:bg-stone-800 rounded border-none outline-none focus:ring-1 focus:ring-gold-500 dark:text-white transition-all">
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">Category</label>
+                                            <select x-model="newItem.category" 
+                                                class="w-full p-3 bg-stone-50 dark:bg-stone-800 rounded border-none outline-none focus:ring-1 focus:ring-gold-500 dark:text-white transition-all appearance-none">
+                                                <option value="">Select Category</option>
+                                                <template x-for="cat in categories.filter(c => c !== 'All')">
+                                                    <option :value="cat" x-text="cat"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">Provenance / Curator's Note</label>
+                                        <textarea x-model="newItem.story" rows="3" 
+                                            placeholder="Describe the journey and history of this artifact..."
+                                            class="w-full p-3 bg-stone-50 dark:bg-stone-800 rounded border-none outline-none focus:ring-1 focus:ring-gold-500 dark:text-white transition-all text-sm font-serif italic"></textarea>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <div class="flex justify-between items-center">
+                                            <label class="text-[9px] uppercase tracking-widest text-stone-500 block">Specifications</label>
+                                            <button @click="addLabel()" class="text-[10px] text-gold-500 font-bold hover:underline">+ Add Field</button>
+                                        </div>
+                                        <template x-for="(detail, index) in newItem.details" :key="index">
+                                            <div class="flex gap-2">
+                                                <input type="text" x-model="detail.label" placeholder="Key" class="w-1/3 p-2 bg-stone-50 dark:bg-stone-800 rounded text-[10px] dark:text-white">
+                                                <input type="text" x-model="detail.value" placeholder="Value" class="flex-1 p-2 bg-stone-50 dark:bg-stone-800 rounded text-[10px] dark:text-white">
+                                                <button @click="removeLabel(index)" class="text-red-400 hover:text-red-600 px-1">×</button>
+                                            </div>
+                                        </template>
+                                    </div>
+
+                                    <div>
+                                        <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">Gallery Upload</label>
+                                        <input type="file" accept="image/*" multiple @change="handleImageUpload($event)"
+                                            class="block w-full text-[10px] text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-gold-500 file:text-white cursor-pointer hover:file:bg-gold-900 transition-all">
+                                        
+                                        <div class="grid grid-cols-4 gap-2 mt-3" x-show="newItem.images.length > 0">
+                                            <template x-for="(img, index) in newItem.images" :key="index">
+                                                <div class="relative aspect-square group">
+                                                    <img :src="img" class="w-full h-full object-cover rounded border border-stone-200 dark:border-stone-800">
+                                                    <button @click="newItem.images.splice(index, 1)" 
+                                                        class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <button @click="addProduct()" 
+                                        class="w-full mt-4 bg-black dark:bg-white text-white dark:text-black py-4 rounded-lg text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-gold-900 transition-colors">
+                                        <span x-text="selectedEditId ? 'Update Entry' : 'Add to Archive'"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="lg:col-span-2">
+                            <div class="bg-white dark:bg-stone-900 rounded-2xl shadow-lg border border-stone-100 dark:border-stone-800 overflow-hidden">
+                                <table class="w-full text-left">
+                                    <thead class="bg-stone-50 dark:bg-black/20 border-b border-stone-100 dark:border-stone-800">
+                                        <tr>
+                                            <th class="p-6 text-[9px] uppercase tracking-widest text-stone-500 font-bold">Item Details</th>
+                                            <th class="p-6 text-[9px] uppercase tracking-widest text-stone-500 font-bold">Status</th>
+                                            <th class="p-6 text-[9px] uppercase tracking-widest text-stone-500 font-bold">Price</th>
+                                            <th class="p-6 text-[9px] uppercase tracking-widest text-stone-500 font-bold text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-stone-100 dark:divide-stone-800">
+                                        <template x-for="item in products" :key="item.id">
+                                            <tr class="transition-colors duration-500"
+    :class="selectedEditId === item.id ? 'bg-gold-500/10 border-l-4 border-gold-500 dark:bg-gold-500/5' : 'hover:bg-stone-50 dark:hover:bg-stone-800/50'">
+                                                <td class="p-6">
+                                                    <div class="flex items-center gap-4">
+                                                        <img :src="item.images[0]" class="w-12 h-12 object-cover rounded shadow-sm">
+                                                        <div>
+                                                            <div class="font-serif font-medium dark:text-white" x-text="item.name"></div>
+                                                            <div class="text-[9px] uppercase text-stone-400 tracking-wider" x-text="item.category"></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="p-6">
+                                                    <button @click="toggleSold(item.id)" 
+                                                        class="px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest"
+                                                        :class="item.isSold ? 'bg-red-100 text-red-600 dark:bg-red-900/30' : 'bg-green-100 text-green-600 dark:bg-green-900/30'">
+                                                        <span x-text="item.isSold ? 'Sold' : 'Available'"></span>
+                                                    </button>
+                                                </td>
+                                                <td class="p-6 text-sm font-medium dark:text-stone-300" x-text="formatCurrency(item.price)"></td>
+                                                <td class="p-6 text-right space-x-2">
+                                                    <button @click="editProduct(item)" class="text-stone-400 hover:text-gold-500 transition-colors">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2.25 2.25 0 113.182 3.182L12 17H9v-3l8.586-8.586z"/></svg>
+                                                    </button>
+                                                    <button @click="deleteProduct(item.id)" class="text-stone-400 hover:text-red-500 transition-colors">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="mt-8 p-8 bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-800 rounded-2xl">
+                                <h3 class="font-display text-lg mb-6 dark:text-white tracking-widest border-b border-stone-200 dark:border-stone-800 pb-2">Archive Security Settings</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">Current Authorization</label>
+                                        <input type="password" x-model="changeCreds.currentPassword" placeholder="Current Password" class="w-full p-2 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs dark:text-white outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">New Identity</label>
+                                        <input type="text" x-model="changeCreds.newUsername" placeholder="New Username" class="w-full p-2 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs dark:text-white outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">New Security Key</label>
+                                        <input type="password" x-model="changeCreds.newPassword" placeholder="New Password" class="w-full p-2 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs dark:text-white outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] uppercase tracking-widest text-stone-500 mb-1 block">Confirm Key</label>
+                                        <input type="password" x-model="changeCreds.confirmPassword" placeholder="Confirm Password" class="w-full p-2 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs dark:text-white outline-none">
+                                    </div>
+                                </div>
+                                <button @click="changeAdminPassword()" 
+                                    class="mt-6 px-8 py-3 bg-gold-500 text-white text-[10px] uppercase font-bold tracking-widest hover:bg-gold-600 transition-colors shadow-lg shadow-gold-500/20">
+                                    Update Credentials
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </template>
+        </div>
+    </template>
+    <template x-if="view === 'orders'">
+        <section class="pt-32 pb-20 px-6 md:px-12 max-w-5xl mx-auto min-h-screen">
+            <h2 class="font-display text-4xl mb-12 dark:text-white">
+            Order History
+            </h2>
+
+            <button
+                @click="createTestOrder()"
+                class="mb-8 px-6 py-2 bg-gold-500 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-gold-600 transition-colors">
+                Create Test Order (Dev)
+            </button>
+
+
+            <div x-show="orders.length === 0"
+                class="text-center py-20 border border-dashed border-stone-300 dark:border-stone-700 rounded-lg">
+            <p class="font-serif text-xl text-stone-400">
+                No completed acquisitions yet.
+            </p>
+            </div>
+
+            <div class="space-y-6" x-show="orders.length > 0">
+            <template x-for="order in orders" :key="order.id">
+                <div class="p-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl space-y-4">
+                
+                <div class="flex justify-between items-center">
+                    <div>
+                    <p class="text-[10px] uppercase tracking-widest text-stone-500">
+                        Order ID
+                    </p>
+                    <p class="font-serif text-lg dark:text-white" x-text="order.id"></p>
+                    </div>
+                    <div class="text-right">
+                    <p class="text-[10px] uppercase tracking-widest text-stone-500">
+                        Total
+                    </p>
+                    <p class="font-medium dark:text-white" x-text="formatCurrency(order.total)"></p>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-4 border-t border-stone-200 dark:border-stone-700">
+                    <p class="text-[9px] uppercase tracking-widest text-stone-400">
+                    <span x-text="new Date(order.date).toLocaleString('en-IN')"></span>
+                    </p>
+
+                    <!-- ✅ THIS IS THE BUTTON YOU WANT -->
+                    <button
+                    @click="downloadInvoice(order)"
+                    class="px-6 py-2 bg-black dark:bg-white text-white dark:text-black text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity">
+                    Download Invoice
+                    </button>
+                </div>
+
+                </div>
+            </template>
+            </div>
+        </section>
+    </template>
+
+    <template x-if="view === 'user-auth'">
+        <section class="pt-32 max-w-md mx-auto px-6 space-y-10">
+
+            <div class="bg-white dark:bg-stone-900 p-8 rounded-xl shadow border">
+            <h2 class="font-display text-2xl mb-6 text-center">User Login</h2>
+
+            <input x-model="userLoginForm.email" placeholder="Email"
+                class="w-full p-3 mb-3 border dark:bg-stone-800">
+
+            <input type="password" x-model="userLoginForm.password" placeholder="Password"
+                class="w-full p-3 mb-4 border dark:bg-stone-800">
+
+            <button @click="loginUser()"
+                class="w-full py-3 bg-black text-white uppercase text-[10px] tracking-widest">
+                Login
+            </button>
+            </div>
+
+            <div class="bg-stone-50 dark:bg-stone-800 p-8 rounded-xl border">
+            <h2 class="font-display text-xl mb-4 text-center">Create Account</h2>
+
+            <input x-model="userSignupForm.name" placeholder="Name"
+                class="w-full p-3 mb-3 border dark:bg-stone-900">
+
+            <input x-model="userSignupForm.email" placeholder="Email"
+                class="w-full p-3 mb-3 border dark:bg-stone-900">
+
+            <input type="password" x-model="userSignupForm.password" placeholder="Password"
+                class="w-full p-3 mb-4 border dark:bg-stone-900">
+
+            <button @click="signupUser()"
+                class="w-full py-3 bg-gold-500 text-white uppercase text-[10px] tracking-widest">
+                Create Account
+            </button>
+            </div>
+
+        </section>
+    </template>
+
+    <template x-if="view === 'verify-otp'">
+        <section class="pt-32 max-w-sm mx-auto px-6">
+            <div class="bg-white dark:bg-stone-900 p-8 rounded-xl shadow border">
+
+            <h2 class="font-display text-xl mb-4 text-center">
+                Verify Email
+            </h2>
+
+            <p class="text-xs text-center mb-4 opacity-70">
+                Code sent to <span x-text="otpEmail"></span>
+            </p>
+
+            <input
+                x-model="otpCode"
+                placeholder="Enter 6-digit code"
+                class="w-full p-3 mb-4 border dark:bg-stone-800"
+            />
+
+            <button
+                @click="verifyOtp()"
+                class="w-full py-3 bg-black text-white uppercase text-[10px] tracking-widest">
+                Verify
+            </button>
+
+            </div>
+        </section>
+    </template>
+
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+
+        /* =======================
+            DARK MODE STORE
+        ======================== */
+        Alpine.store('darkMode', {
+            isDark: localStorage.getItem('sov_dark') === 'true',
+            toggle() {
+            this.isDark = !this.isDark;
+            localStorage.setItem('sov_dark', this.isDark);
+            document.documentElement.classList.toggle('dark', this.isDark);
+            }
+        });
+
+        /* =======================
+            MAIN APP
+        ======================== */
+        Alpine.data('shopSystem', () => ({
+            view: 'home',
+            scrolled: false,
+
+            cart: [],
+            products: [],
+            notifications: [],
+            orders: [],
+
+            searchQuery: '',
+            activeCategory: 'All',
+            categories: ['All', 'Horology', 'Sculpture', 'Furniture', 'Fine Art', 'Ancient'],
+
+            selectedProduct: {},
+
+            /* ---------- ADMIN STATE ---------- */
+            isLoggedIn: false,
+            loginForm: { password: '' },
+            authError: '',
+            selectedEditId: null,
+
+            newItem: {
+            name: '',
+            price: '',
+            category: 'Furniture',
+            era: '',
+            description: '',
+            story: '',
+            images: [],
+            details: [{ label: '', value: '' }],
+            },
+
+            changeCreds: {
+            currentPassword: '',
+            newUsername: '',
+            newPassword: '',
+            confirmPassword: ''
+            },
+
+            user: null,
+            isUserLoggedIn: false,
+
+            userLoginForm: {
+                email: '',
+                password: ''
+            },
+
+            userSignupForm: {
+                name: '',
+                email: '',
+                password: ''
+            },
+
+
+            saveOrders() {
+                localStorage.setItem('orders', JSON.stringify(this.orders));
+            }, 
+
+            createTestOrder() {
+                const order = {
+                    id: 'TEST-' + Date.now(),
+                    paymentId: 'TEST-PAYMENT',
+                    date: new Date().toISOString(),
+                    items: this.products.slice(0, 1),
+                    total: this.products[0]?.price || 10000
+                };
+
+                this.orders.unshift(order);
+                this.saveOrders();
+
+                this.notify('Test Order Created', 'Order added for testing');
+            },
+
+
+
+            API_URL: 'http://localhost:5000/api',
+
+            /* =======================
+            INIT (ONLY ONE)
+            ======================== */
+            init() {
+  // Restore admin session
+                this.isAdminLoggedIn = !!localStorage.getItem('adminToken');
+
+                // Restore user session
+                const storedUser = localStorage.getItem('user');
+                if (storedUser) {
+                    this.user = JSON.parse(storedUser);
+                    this.isUserLoggedIn = true;
+                }
+
+                // Restore products
+                const storedProducts = localStorage.getItem('products');
+                this.products = storedProducts ? JSON.parse(storedProducts) : [];
+                if (!this.products.length) this.seedData();
+
+                // Restore cart & orders
+                this.cart = JSON.parse(localStorage.getItem('cart') || '[]');
+                this.orders = JSON.parse(localStorage.getItem('orders') || '[]');
+
+                // Scroll effect
+                window.addEventListener('scroll', () => {
+                    this.scrolled = window.scrollY > 50;
+                });
+
+                // 🔥 VIEW WATCHER (fixes disappearing admin/dashboard)
+                this.$watch('view', v => {
+                    if (v === 'admin' && this.isAdminLoggedIn) {
+                    this.$nextTick(() => {
+                        this.resetAdminChart();
+                        this.loadAdminDashboard();
+                    });
+                    }
+                });
+            },
+
+
+            /* =======================
+            COMPUTED
+            ======================== */
+            get filteredProducts() {
+            return this.products.filter(p => {
+                const s = this.searchQuery.toLowerCase();
+                return (
+                p.name.toLowerCase().includes(s) &&
+                (this.activeCategory === 'All' || p.category === this.activeCategory)
+                );
+            });
+            },
+
+            /* =======================
+            NAV & UI
+            ======================== */
+            goTo(v) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            this.view = v;
+            },
+
+            toggleTheme() {
+            this.$store.darkMode.toggle();
+            },
+
+            formatCurrency(val) {
+            return new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                maximumFractionDigits: 0
+            }).format(val);
+            },
+
+            /* =======================
+            PRODUCT VIEW
+            ======================== */
+            openProduct(p) {
+            this.selectedProduct = p;
+            this.view = 'product-detail';
+            window.scrollTo(0, 0);
+            },
+
+            inCart(id) {
+            return this.cart.some(i => i.id === id);
+            },
+
+            getButtonText(p) {
+            if (p.isSold) return 'In Private Collection';
+            if (this.inCart(p.id)) return 'In Acquisition List';
+            return 'Acquire This Piece';
+            },
+
+            /* =======================
+            CART
+            ======================== */
+            addToCart(p) {
+            if (this.inCart(p.id)) return;
+            this.cart.push(p);
+            this.saveCart();
+            this.notify('Added', `"${p.name}" added to collection`);
+            },
+
+            removeFromCart(index) {
+            this.cart.splice(index, 1);
+            this.saveCart();
+            },
+
+            cartTotal() {
+            return this.cart.reduce((s, i) => s + i.price, 0);
+            },
+
+            saveCart() {
+            localStorage.setItem('cart', JSON.stringify(this.cart));
+            },
+
+            payWithRazorpay() {
+                const totalAmount = this.cartTotal();
+
+                if (totalAmount <= 0) {
+                    this.notify('Error', 'Your collection is empty', 'error');
+                    return;
+                }
+
+                const options = {
+                    key: "rzp_test_placeholder", // use your test/live key
+                    amount: totalAmount * 100, // INR → paise
+                    currency: "INR",
+                    name: "Sovereign Antiques",
+                    description: "Artifact Acquisition",
+                    handler: (response) => {
+
+                    // ✅ CREATE ORDER HISTORY ENTRY
+                    const order = {
+                        id: Date.now(),
+                        paymentId: response.razorpay_payment_id,
+                        date: new Date().toISOString(),
+                        items: JSON.parse(JSON.stringify(this.cart)),
+                        total: totalAmount
+                    };
+
+                    this.orders.unshift(order);
+                    this.saveOrders();
+
+                    this.downloadInvoice(order);
+
+
+                    /* MARK ITEMS AS SOLD */
+                    order.items.forEach(item => {
+                    const p = this.products.find(prod => prod.id === item.id);
+                    if (p) p.isSold = true;
+                    });
+                    this.saveProducts();
+
+                    this.notify('Payment Successful', 'Order recorded');
+                    this.cart = [];
+                    this.saveCart();
+                    this.goTo('catalog');
+
+                    },
+                    modal: {
+                    ondismiss: () => {
+                        this.notify('Cancelled', 'Payment interrupted', 'error');
+                    }
+                    },
+                    theme: { color: "#D4AF37" }
+                };
+
+                const rzp = new Razorpay(options);
+
+                rzp.on('payment.failed', (response) => {
+                    this.notify('Payment Failed', response.error.description, 'error');
+                });
+
+                rzp.open();
+            },
+
+            downloadInvoice(order) {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+
+                let y = 20;
+
+                // Header
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(20);
+                doc.text('SOVEREIGN ANTIQUES', 105, y, { align: 'center' });
+
+                y += 8;
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.text('Heritage & History', 105, y, { align: 'center' });
+
+                y += 6;
+                doc.line(20, y, 190, y);
+
+                // Meta
+                y += 12;
+                doc.setFontSize(11);
+                doc.text(`Invoice ID: ${order.id}`, 20, y);
+                doc.text(`Payment ID: ${order.paymentId}`, 120, y);
+
+                y += 6;
+                doc.text(
+                    `Date: ${new Date(order.date).toLocaleString('en-IN')}`,
+                    20,
+                    y
+                );
+
+                // Table header
+                y += 14;
+                doc.setFont('helvetica', 'bold');
+                doc.text('Artifact', 20, y);
+                doc.text('Price (INR)', 190, y, { align: 'right' });
+
+                y += 2;
+                doc.line(20, y, 190, y);
+
+                // Items
+                y += 8;
+                doc.setFont('helvetica', 'normal');
+
+                order.items.forEach(item => {
+                    doc.text(item.name, 20, y);
+                    doc.text(
+                        item.price.toLocaleString('en-IN'),
+                        190,
+                        y,
+                        { align: 'right' }
+                    );
+
+                    y += 7;
+                });
+
+                // Total
+                y += 5;
+                doc.line(20, y, 190, y);
+
+                y += 10;
+                doc.setFont('helvetica', 'bold');
+                doc.text('Total (INR)', 20, y);
+                doc.text(
+                    order.total.toLocaleString('en-IN'),
+                    190,
+                    y,
+                    { align: 'right' }
+                );
+
+
+                // Footer
+                y += 20;
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.text(
+                    'This is a system-generated invoice. Thank you for acquiring history with Sovereign Antiques.',
+                    20,
+                    y
+                );
+
+                const formatNumber = n => n.toLocaleString('en-IN');
+
+                // Download
+                doc.save(`Invoice-${order.id}.pdf`);
+            },
+
+
+
+
+            /* =======================
+            ADMIN IMAGE UPLOAD
+            ======================== */
+            handleImageUpload(e) {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = ev => {
+                this.newItem.images.push(ev.target.result);
+                };
+                reader.readAsDataURL(file);
+            });
+            },
+
+            addLabel() {
+            this.newItem.details.push({ label: '', value: '' });
+            },
+
+            removeLabel(i) {
+            this.newItem.details.splice(i, 1);
+            },
+
+            /* =======================
+            ADMIN CRUD
+            ======================== */
+            addProduct() {
+            if (!this.newItem.name || !this.newItem.price) {
+                this.notify('Error', 'Name and price required', 'error');
+                return;
+            }
+
+            if (this.selectedEditId) {
+                const i = this.products.findIndex(p => p.id === this.selectedEditId);
+                if (i !== -1) {
+                this.products[i] = {
+                    ...this.products[i],
+                    ...this.newItem,
+                    price: Number(this.newItem.price)
+                };
+                this.notify('Updated', 'Artifact updated');
+                }
+            } else {
+                this.products.push({
+                id: Date.now(),
+                ...this.newItem,
+                price: Number(this.newItem.price),
+                isSold: false
+                });
+                this.notify('Added', 'Artifact added');
+            }
+
+            this.saveProducts();
+            this.resetForm();
+            },
+
+            editProduct(item) {
+            this.selectedEditId = item.id;
+            this.newItem = JSON.parse(JSON.stringify(item));
+            document.querySelector('.lg\\:col-span-1')?.scrollIntoView({ behavior: 'smooth' });
+            },
+
+            deleteProduct(id) {
+            if (!confirm('Delete permanently?')) return;
+            this.products = this.products.filter(p => p.id !== id);
+            this.saveProducts();
+            this.notify('Removed', 'Artifact deleted');
+            },
+
+            toggleSold(id) {
+            const p = this.products.find(x => x.id === id);
+            if (p) {
+                p.isSold = !p.isSold;
+                this.saveProducts();
+            }
+            },
+
+            resetForm() {
+            this.selectedEditId = null;
+            this.newItem = {
+                name: '',
+                price: '',
+                category: 'Furniture',
+                era: '',
+                description: '',
+                story: '',
+                images: [],
+                details: [{ label: '', value: '' }]
+            };
+            },
+
+            saveProducts() {
+            localStorage.setItem('products', JSON.stringify(this.products));
+            },
+
+            /* =======================
+            AUTH
+            ======================== */
+            async login() {
+                try {
+                    const response = await fetch("http://localhost:5000/api/admin/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        password: this.loginForm.password // ✅ password only
+                    })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                    this.notify("Error", data.message || "Login failed", "error");
+                    return;
+                    }
+
+                    localStorage.setItem("adminToken", data.token);
+                    this.isLoggedIn = true;
+                    this.authError = "";
+
+                    // ✅ LOAD DASHBOARD AFTER LOGIN
+                    this.loadAdminDashboard();
+
+                    this.notify("Welcome", "Admin authenticated");
+                } catch (e) {
+                    this.notify("Error", "Server not reachable", "error");
+                }
+            },
+
+            /* =======================
+    ADMIN: CHANGE PASSWORD
+======================== */
+            async changeAdminPassword() {
+                const { currentPassword, newPassword, confirmPassword } = this.changeCreds;
+
+                // 1. Local Validation
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    this.notify('Error', 'All fields are required', 'error');
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    this.notify('Error', 'New passwords do not match', 'error');
+                    return;
+                }
+
+                try {
+                    const token = localStorage.getItem('adminToken'); // Get saved JWT
+                    
+                    const response = await fetch(`${this.API_URL}/admin/change-password`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}` // Provide authorization
+                        },
+                        body: JSON.stringify({
+                            currentPassword: currentPassword,
+                            newPassword: newPassword,
+                            confirmNewPassword: confirmPassword
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.notify('Success', 'Admin password updated');
+                        // Reset the form fields
+                        this.changeCreds = { newUsername: '', currentPassword: '', newPassword: '', confirmPassword: '' };
+                    } else {
+                        this.notify('Error', data.message || 'Update failed', 'error');
+                    }
+                } catch (e) {
+                    this.notify('Error', 'Connection failed', 'error');
+                }
+            },
+
+            logout() {
+            localStorage.removeItem('adminToken');
+            this.isLoggedIn = false;
+            this.view = 'catalog';
+            this.notify('Logged Out', 'Session ended');
+            },
+
+            async signupUser() {
+                try {
+                    const r = await fetch(`${this.API_URL}/signup`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.userSignupForm)
+                    });
+
+                    const d = await r.json();
+                    if (!r.ok) throw new Error(d.message);
+
+                    // ✅ Correctly reference the email from the form
+                    this.otpEmail = this.userSignupForm.email; 
+                    this.isAwaitingOtp = true;
+                    this.view = 'verify-otp';
+
+                    this.notify('OTP Sent', 'Check your email for the verification code');
+
+                } catch (e) {
+                    this.notify('Error', e.message, 'error');
+                }
+                
+                // ✅ Fix the console log here too
+                console.log('Request processed for:', this.userSignupForm.email);
+            },
+
+            /* ---------- ADMIN DASHBOARD STATE ---------- */
+            adminCards: [
+                { label: 'Total Users', value: 0, iconBg: 'bg-blue-500', icon: '<path d="M5 12h14M12 5v14" />' },
+                { label: 'Total Orders', value: 0, iconBg: 'bg-gold-500', icon: '<path d="M3 7h18M3 12h18M3 17h18" />' },
+                { label: 'Total Revenue', value: '₹0', iconBg: 'bg-green-500', icon: '<path d="M12 8v8M8 12h8" />' },
+                { label: 'Items Sold', value: 0, iconBg: 'bg-red-500', icon: '<path d="M5 13l4 4L19 7" />' }
+            ],
+
+            dashboardStats: {
+                totalUsers: 0,
+                totalOrders: 0,
+                totalRevenue: 0,
+                totalItemsSold: 0,
+                revenueTarget: 100000
+            },
+
+            adminRecentOrders: [],
+            chartInstance: null,
+
+
+
+                /* ---------- ADMIN DASHBOARD METHODS ---------- */
+            /* =======================
+   LOAD ADMIN DASHBOARD
+======================= */
+            async loadAdminDashboard() {
+                if (!this.isAdminLoggedIn) return;
+
+                const token = localStorage.getItem('adminToken');
+                if (!token) return;
+
+                try {
+                    const res = await fetch('http://localhost:5000/api/admin/stats', {
+                    headers: { Authorization: 'Bearer ' + token }
+                    });
+
+                    if (!res.ok) throw new Error('Stats fetch failed');
+
+                    const data = await res.json();
+                    const s = data.stats;
+
+                    // Stats
+                    this.dashboardStats.totalUsers = Number(s.totalUsers || 0);
+                    this.dashboardStats.totalOrders = Number(s.totalOrders || 0);
+                    this.dashboardStats.totalRevenue = Number(s.totalRevenue || 0);
+                    this.dashboardStats.totalItemsSold = Number(s.totalItemsSold || 0);
+
+                    // Cards
+                    this.adminCards[0].value = this.dashboardStats.totalUsers;
+                    this.adminCards[1].value = this.dashboardStats.totalOrders;
+                    this.adminCards[2].value =
+                    '₹' + this.dashboardStats.totalRevenue.toLocaleString('en-IN');
+                    this.adminCards[3].value = this.dashboardStats.totalItemsSold;
+
+                    // Recent Orders
+                    this.adminRecentOrders = (data.recentOrders || []).map(o => ({
+                    id: o.id,
+                    date: o.date,
+                    amount: Number(o.amount || 0),
+                    status: o.status
+                    }));
+
+                    this.$nextTick(() => this.renderAdminChart());
+
+                } catch (err) {
+                    console.error('Admin dashboard error:', err);
+                }
+            },
+
+
+                /* =======================
+   ADMIN CHART
+======================= */
+            renderAdminChart() {
+                const canvas = document.getElementById('adminChart');
+                if (!canvas) return;
+
+                // Destroy previous chart
+                if (this.chartInstance) {
+                    this.chartInstance.destroy();
+                    this.chartInstance = null;
+                }
+
+                const months = ['Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'];
+
+                // Build chart data from recent orders
+                const monthlyTotals = Array(12).fill(0);
+                this.adminRecentOrders.forEach(o => {
+                    const m = new Date(o.date).getMonth();
+                    monthlyTotals[m] += o.amount;
+                });
+
+                this.chartInstance = new Chart(canvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                    labels: months,
+                    datasets: [
+                        {
+                        label: 'Revenue',
+                        data: monthlyTotals,
+                        backgroundColor: 'rgba(212,175,55,0.9)'
+                        }
+                    ]
+                    },
+                    options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                        ticks: { color: '#9ca3af' },
+                        grid: { color: 'transparent' }
+                        },
+                        y: {
+                        ticks: { color: '#9ca3af' },
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                        }
+                    }
+                    }
+                });
+            },
+
+
+            resetAdminChart() {
+                if (this.chartInstance) {
+                    this.chartInstance.destroy();
+                    this.chartInstance = null;
+                }
+            },
+
+
+
+            async loginUser() {
+                try {
+                    const r = await fetch(`${this.API_URL}/login-user`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.userLoginForm)
+                    });
+
+                    const d = await r.json();
+                    if (!r.ok) throw new Error(d.message);
+
+                    localStorage.setItem('userToken', d.token);
+                    localStorage.setItem('user', JSON.stringify(d.user));
+
+                    this.user = d.user;
+                    this.isUserLoggedIn = true;
+                    this.userLoginForm = { email: '', password: '' };
+
+                    this.notify('Welcome Back', d.user.name);
+                    this.view = 'catalog';
+
+                } catch (e) {
+                    this.notify('Login Failed', e.message, 'error');
+                }
+            },
+            
+            logoutUser() {
+                localStorage.removeItem('userToken');
+                localStorage.removeItem('user');
+                this.user = null;
+                this.isUserLoggedIn = false;
+                this.notify('Logged Out', 'See you again');
+            },
+            async verifyOtp() {
+                try { // ✅ Added missing try
+                    const r = await fetch(`${this.API_URL}/verify-otp`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: this.otpEmail, // ✅ Changed pendingEmail to otpEmail
+                            code: this.otpCode
+                        })
+                    });
+
+                    const d = await r.json();
+                    if (!r.ok) {
+                        this.notify('Verification Failed', d.message, 'error');
+                        return;
+                    }
+
+                    // ✅ STORE SESSION
+                    localStorage.setItem('userToken', d.token);
+                    localStorage.setItem('user', JSON.stringify(d.user));
+
+                    this.user = d.user; // ✅ Added this to update the UI name
+                    this.isUserLoggedIn = true;
+                    this.view = 'catalog';
+                    this.notify('Verified', 'Account activated');
+
+                } catch (e) { // ✅ This catch now belongs to a try block
+                    this.notify('Error', e.message || 'Invalid OTP', 'error');
+                }
+            },
+
+            isAwaitingOtp: false,
+            otpEmail: '',
+            otpCode: '',
+
+
+            /* =======================
+            NOTIFICATIONS
+            ======================== */
+            notify(title, message, type = 'success') {
+            const id = Date.now();
+            this.notifications.push({ id, title, message, type, show: true });
+            setTimeout(() => {
+                this.notifications = this.notifications.filter(n => n.id !== id);
+            }, 3000);
+            },
+
+            /* =======================
+            SEED DATA
+            ======================== */
+        seedData() {
+            this.products = [
+                {
+                id: 1,
+                name: "18th C. French Astronomical Clock",
+                price: 3800000,
+                category: "Horology",
+                era: "Circa 1780",
+                isSold: false,
+                description: "Astronomical complications and lunar phases.",
+                images: [
+                    "https://images.unsplash.com/photo-1509048191080-d2984bad6ae5"
+                ],
+                details: [{ label: "Material", value: "Gilt Bronze" }]
+                }
+            ];
+            this.saveProducts();
+            }
+        }));
+        });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>
